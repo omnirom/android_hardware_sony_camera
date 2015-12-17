@@ -51,7 +51,7 @@ LOCAL_C_INCLUDES := \
 #HAL 1.0 Include paths
 LOCAL_C_INCLUDES += \
         frameworks/native/include/media/hardware \
-        hardware/qcom/camera/QCamera2/HAL
+        hardware/sony/camera/QCamera2/HAL
 
 #LOCAL_STATIC_LIBRARIES := libqcamera2_util
 LOCAL_C_INCLUDES += \
