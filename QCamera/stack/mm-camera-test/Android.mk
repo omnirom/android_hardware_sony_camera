@@ -1,3 +1,5 @@
+ifeq ($(SONY_AOSP), true)
+
 OLD_LOCAL_PATH := $(LOCAL_PATH)
 LOCAL_PATH:=$(call my-dir)
 include $(CLEAR_VARS)
@@ -62,3 +64,5 @@ include $(BUILD_EXECUTABLE)
 endif
 
 LOCAL_PATH := $(OLD_LOCAL_PATH)
+
+endif

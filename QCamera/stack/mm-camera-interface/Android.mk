@@ -1,3 +1,5 @@
+ifeq ($(SONY_AOSP), true)
+
 #ifeq ($(TARGET_BOARD_PLATFORM),msm8960)
 OLD_LOCAL_PATH := $(LOCAL_PATH)
 LOCAL_PATH := $(call my-dir)
@@ -63,3 +65,5 @@ include $(BUILD_SHARED_LIBRARY)
 
 LOCAL_PATH := $(OLD_LOCAL_PATH)
 #endif
+
+endif
