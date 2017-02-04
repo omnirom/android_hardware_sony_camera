@@ -307,7 +307,7 @@ int32_t mm_camera_open(mm_camera_obj_t *my_obj)
             }
             break;
         }
-        CDBG("%s:failed with I/O error retrying after %d milli-seconds",
+        CDBG_HIGH("%s:failed with I/O error retrying after %d milli-seconds",
              __func__, sleep_msec);
         usleep(sleep_msec * 1000U);
     }while (n_try > 0);
@@ -2203,7 +2203,6 @@ int32_t mm_camera_reg_stream_buf_cb(mm_camera_obj_t *my_obj,
         mm_camera_stream_cb_type cb_type, void *userdata)
 {
     int rc = 0;
-    mm_stream_t *stream = NULL;
     mm_stream_data_cb_t buf_cb;
     mm_channel_t * ch_obj =
             mm_camera_util_get_channel_by_handler(my_obj, ch_id);
