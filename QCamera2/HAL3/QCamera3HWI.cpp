@@ -273,15 +273,15 @@ const QCamera3HardwareInterface::QCameraMap<
 };
 
 camera3_device_ops_t QCamera3HardwareInterface::mCameraOps = {
-    initialize:                         QCamera3HardwareInterface::initialize,
-    configure_streams:                  QCamera3HardwareInterface::configure_streams,
-    register_stream_buffers:            NULL,
-    construct_default_request_settings: QCamera3HardwareInterface::construct_default_request_settings,
-    process_capture_request:            QCamera3HardwareInterface::process_capture_request,
-    get_metadata_vendor_tag_ops:        NULL,
-    dump:                               QCamera3HardwareInterface::dump,
-    flush:                              QCamera3HardwareInterface::flush,
-    reserved:                           {0},
+    .initialize                         = QCamera3HardwareInterface::initialize,
+    .configure_streams                  = QCamera3HardwareInterface::configure_streams,
+    .register_stream_buffers            = NULL,
+    .construct_default_request_settings = QCamera3HardwareInterface::construct_default_request_settings,
+    .process_capture_request            = QCamera3HardwareInterface::process_capture_request,
+    .get_metadata_vendor_tag_ops        = NULL,
+    .dump                               = QCamera3HardwareInterface::dump,
+    .flush                              = QCamera3HardwareInterface::flush,
+    .reserved                           = {0}
 };
 
 /*===========================================================================
@@ -683,7 +683,9 @@ int QCamera3HardwareInterface::closeCamera()
 {
     ATRACE_CALL();
     int rc = NO_ERROR;
+#ifndef VANILLA_HAL
     char value[PROPERTY_VALUE_MAX];
+#endif
 
     rc = mCameraHandle->ops->close_camera(mCameraHandle->camera_handle);
     mCameraHandle = NULL;
@@ -761,7 +763,6 @@ int QCamera3HardwareInterface::validateStreamDimensions(
         camera3_stream_configuration_t *streamList)
 {
     int rc = NO_ERROR;
-    int32_t available_processed_sizes[MAX_SIZES_CNT * 2];
     size_t count = 0;
 
     /*
@@ -770,7 +771,6 @@ int QCamera3HardwareInterface::validateStreamDimensions(
     */
     for (size_t j = 0; j < streamList->num_streams; j++) {
         bool sizeFound = false;
-        size_t jpeg_sizes_cnt = 0;
         camera3_stream_t *newStream = streamList->streams[j];
 
         /*
@@ -1090,7 +1090,6 @@ int QCamera3HardwareInterface::configureStreams(
     uint8_t eis_prop_set;
     uint32_t maxEisWidth = 0;
     uint32_t maxEisHeight = 0;
-    int32_t hal_version = CAM_HAL_V3;
 
     size_t count = IS_TYPE_MAX;
     count = MIN(gCamCapability[mCameraId]->supported_is_types_cnt, count);
@@ -1716,7 +1715,7 @@ int QCamera3HardwareInterface::validateCaptureRequest(
         return BAD_VALUE;
     }
     if (request->num_output_buffers >= MAX_NUM_STREAMS) {
-        ALOGE("%s: Number of buffers %d equals or is greater than maximum number of streams!",
+        ALOGE("%s: Number of buffers %d equals or is greater than maximum number of streams! %d",
                 __func__, request->num_output_buffers, MAX_NUM_STREAMS);
         return BAD_VALUE;
     }
@@ -3349,7 +3348,7 @@ int QCamera3HardwareInterface::flushPerf()
     }
 
     if (mPendingBuffersMap.num_buffers == 0) {
-        CDBG("%s: No pending buffers in the HAL, return flush");
+        ALOGD("No pending buffers in the HAL, return flush");
         mFlushPerf = false;
         pthread_mutex_unlock(&mMutex);
         return rc;
@@ -4631,8 +4630,6 @@ void QCamera3HardwareInterface::dumpMetadataToFile(tuning_params_t &meta,
                                                    const char *type,
                                                    uint32_t frameNumber)
 {
-    uint32_t frm_num = 0;
-
     //Some sanity checks
     if (meta.tuning_sensor_data_size > TUNING_SENSOR_DATA_MAX) {
         ALOGE("%s : Tuning sensor data size bigger than expected %d: %d",
@@ -6513,7 +6510,7 @@ camera_metadata_t* QCamera3HardwareInterface::translateCapabilityToMetadata(int 
     uint8_t focusMode;
     uint8_t vsMode;
     uint8_t optStabMode;
-    uint8_t cacMode;
+    uint8_t cacMode = ANDROID_COLOR_CORRECTION_ABERRATION_MODE_OFF;
     bool highQualityModeEntryAvailable = FALSE;
     bool fastModeEntryAvailable = FALSE;
     uint8_t edge_mode = ANDROID_EDGE_MODE_FAST;
@@ -6525,12 +6522,13 @@ camera_metadata_t* QCamera3HardwareInterface::translateCapabilityToMetadata(int 
         controlIntent = ANDROID_CONTROL_CAPTURE_INTENT_PREVIEW;
         focusMode = ANDROID_CONTROL_AF_MODE_CONTINUOUS_PICTURE;
         optStabMode = ANDROID_LENS_OPTICAL_STABILIZATION_MODE_ON;
+        if (gCamCapability[mCameraId]->aberration_modes_count > 0)
+            cacMode = ANDROID_COLOR_CORRECTION_ABERRATION_MODE_FAST;
         break;
       case CAMERA3_TEMPLATE_STILL_CAPTURE:
         controlIntent = ANDROID_CONTROL_CAPTURE_INTENT_STILL_CAPTURE;
         focusMode = ANDROID_CONTROL_AF_MODE_CONTINUOUS_PICTURE;
         optStabMode = ANDROID_LENS_OPTICAL_STABILIZATION_MODE_ON;
-        cacMode = ANDROID_COLOR_CORRECTION_ABERRATION_MODE_OFF;
         // Order of priority for default CAC is HIGH Quality -> FAST -> OFF
         for (size_t i = 0; i < gCamCapability[mCameraId]->aberration_modes_count; i++) {
             if (gCamCapability[mCameraId]->aberration_modes[i] ==
@@ -6551,7 +6549,6 @@ camera_metadata_t* QCamera3HardwareInterface::translateCapabilityToMetadata(int 
         noise_red_mode = ANDROID_NOISE_REDUCTION_MODE_HIGH_QUALITY;
         tonemap_mode = ANDROID_TONEMAP_MODE_HIGH_QUALITY;
         #endif
-        settings.update(ANDROID_COLOR_CORRECTION_ABERRATION_MODE, &cacMode, 1);
         break;
       case CAMERA3_TEMPLATE_VIDEO_RECORD:
         controlIntent = ANDROID_CONTROL_CAPTURE_INTENT_VIDEO_RECORD;
@@ -6559,6 +6556,8 @@ camera_metadata_t* QCamera3HardwareInterface::translateCapabilityToMetadata(int 
         optStabMode = ANDROID_LENS_OPTICAL_STABILIZATION_MODE_OFF;
         if (forceVideoOis)
             optStabMode = ANDROID_LENS_OPTICAL_STABILIZATION_MODE_ON;
+        if (gCamCapability[mCameraId]->aberration_modes_count > 0)
+            cacMode = ANDROID_COLOR_CORRECTION_ABERRATION_MODE_FAST;
         break;
       case CAMERA3_TEMPLATE_VIDEO_SNAPSHOT:
         controlIntent = ANDROID_CONTROL_CAPTURE_INTENT_VIDEO_SNAPSHOT;
@@ -6588,6 +6587,8 @@ camera_metadata_t* QCamera3HardwareInterface::translateCapabilityToMetadata(int 
         focusMode = ANDROID_CONTROL_AF_MODE_OFF;
     }
     settings.update(ANDROID_CONTROL_AF_MODE, &focusMode, 1);
+
+    settings.update(ANDROID_COLOR_CORRECTION_ABERRATION_MODE, &cacMode, 1);
 
     if (gCamCapability[mCameraId]->optical_stab_modes_count == 1 &&
             gCamCapability[mCameraId]->optical_stab_modes[0] == CAM_OPT_STAB_ON)
@@ -8312,7 +8313,7 @@ bool QCamera3HardwareInterface::needJpegRotation()
  *==========================================================================*/
 QCamera3ReprocessChannel *QCamera3HardwareInterface::addOfflineReprocChannel(
         const reprocess_config_t &config, QCamera3PicChannel *picChHandle,
-        metadata_buffer_t *metadata)
+        __unused metadata_buffer_t *metadata)
 {
     int32_t rc = NO_ERROR;
     QCamera3ReprocessChannel *pChannel = NULL;

@@ -197,6 +197,7 @@ const char QCameraParameters::KEY_QC_CACHE_VIDEO_BUFFERS[] = "cache-video-buffer
 const char QCameraParameters::KEY_QC_LONG_SHOT[] = "long-shot";
 const char QCameraParameters::KEY_QC_INSTANT_AEC[] = "instant-aec";
 const char QCameraParameters::KEY_QC_INSTANT_CAPTURE[] = "instant-capture";
+const char QCameraParameters::KEY_QC_INITIAL_EXPOSURE_INDEX[] = "initial-exp-index";
 
 // Values for effect settings.
 const char QCameraParameters::EFFECT_EMBOSS[] = "emboss";
@@ -1035,7 +1036,7 @@ QCameraParameters::~QCameraParameters()
  *==========================================================================*/
 String8 QCameraParameters::createSizesString(const cam_dimension_t *sizes, size_t len)
 {
-    String8 str;
+    String8 str("");
     char buffer[32];
 
     if (len > 0) {
@@ -1067,7 +1068,7 @@ String8 QCameraParameters::createSizesString(const cam_dimension_t *sizes, size_
 template <typename valuesType, class mapType> String8 createValuesString(
         const valuesType *values, size_t len, const mapType *map, size_t map_len)
 {
-    String8 str;
+    String8 str("");
     int count = 0;
 
     for (size_t i = 0; i < len; i++ ) {
@@ -1100,7 +1101,7 @@ template <typename valuesType, class mapType> String8 createValuesString(
 template <class mapType> String8 createValuesStringFromMap(
         const mapType *map, size_t map_len)
 {
-    String8 str;
+    String8 str("");
 
     for (size_t i = 0; i < map_len; i++) {
         if (NULL != map[i].desc) {
@@ -1127,7 +1128,7 @@ template <class mapType> String8 createValuesStringFromMap(
 String8 QCameraParameters::createZoomRatioValuesString(uint32_t *zoomRatios,
         size_t length)
 {
-    String8 str;
+    String8 str("");
     char buffer[32] = {0};
 
     if(length > 0){
@@ -1160,7 +1161,7 @@ String8 QCameraParameters::createZoomRatioValuesString(uint32_t *zoomRatios,
 String8 QCameraParameters::createHfrValuesString(const cam_hfr_info_t *values,
         size_t len, const QCameraMap<cam_hfr_mode_t> *map, size_t map_len)
 {
-    String8 str;
+    String8 str("");
     int count = 0;
 
     char value[PROPERTY_VALUE_MAX];
@@ -1209,7 +1210,7 @@ String8 QCameraParameters::createHfrValuesString(const cam_hfr_info_t *values,
  *==========================================================================*/
 String8 QCameraParameters::createHfrSizesString(const cam_hfr_info_t *values, size_t len)
 {
-    String8 str;
+    String8 str("");
     char buffer[32];
 
     if (len > 0) {
@@ -1238,7 +1239,7 @@ String8 QCameraParameters::createHfrSizesString(const cam_hfr_info_t *values, si
 String8 QCameraParameters::createFpsString(cam_fps_range_t &fps)
 {
     char buffer[32];
-    String8 fpsValues;
+    String8 fpsValues("");
 
     int min_fps = int(fps.min_fps);
     int max_fps = int(fps.max_fps);
@@ -1277,7 +1278,7 @@ String8 QCameraParameters::createFpsString(cam_fps_range_t &fps)
 String8 QCameraParameters::createFpsRangeString(const cam_fps_range_t* fps,
         size_t len, int &default_fps_index)
 {
-    String8 str;
+    String8 str("");
     char buffer[32];
     int max_range = 0;
     int min_fps, max_fps;
@@ -4842,6 +4843,7 @@ int32_t QCameraParameters::updateParameters(QCameraParameters& params,
     if ((rc = setCacheVideoBuffers(params)))            final_rc = rc;
     if ((rc = setInstantCapture(params)))               final_rc = rc;
     if ((rc = setInstantAEC(params)))                   final_rc = rc;
+    if ((rc = setInitialExposureIndex(params)))         final_rc = rc;
 
     // update live snapshot size after all other parameters are set
     if ((rc = setLiveSnapshotSize(params)))             final_rc = rc;
@@ -5914,7 +5916,7 @@ void QCameraParameters::deinit()
     }
 
     //clear all entries in the map
-    String8 emptyStr;
+    String8 emptyStr("");
     QCameraParameters::unflatten(emptyStr);
 
     if (NULL != m_pCamOpsTbl) {
@@ -6941,7 +6943,7 @@ int32_t QCameraParameters::configureFlash(cam_capture_frame_config_t &frame_conf
 
         rc = setCDSMode(CAM_CDS_MODE_OFF, false);
         if (rc != NO_ERROR) {
-            ALOGE("%s: Failed to configure csd mode", __func__);
+            ALOGE("%s: Failed to configure cds mode", __func__);
             return rc;
         }
 
@@ -7177,7 +7179,7 @@ int32_t QCameraParameters::resetFrameCapture(bool commitSettings)
 
         rc = setCDSMode(mCds_mode, false);
         if (rc != NO_ERROR) {
-            ALOGE("%s: Failed to configure csd mode", __func__);
+            ALOGE("%s: Failed to configure cds mode", __func__);
             return rc;
         }
     }
@@ -7627,6 +7629,59 @@ int32_t QCameraParameters::setInstantAEC(const QCameraParameters& params)
 }
 
 /*===========================================================================
+ * FUNCTION   : setInitialExposureIndex
+ *
+ * DESCRIPTION: Set initial exposure index value
+ *
+ * PARAMETERS :
+ *   @params  : user setting parameters
+ *
+ * RETURN     : int32_t type of status
+ *              NO_ERROR  -- success
+ *              none-zero failure code
+ *==========================================================================*/
+int32_t QCameraParameters::setInitialExposureIndex(const QCameraParameters& params)
+{
+    int32_t rc = NO_ERROR;
+    int value = -1;
+    const char *str = params.get(KEY_QC_INITIAL_EXPOSURE_INDEX);
+    const char *prev_str = get(KEY_QC_INITIAL_EXPOSURE_INDEX);
+    if (str) {
+        if ((prev_str == NULL) || (strcmp(str, prev_str) != 0)) {
+            value = atoi(str);
+            CDBG("%s: Set initial exposure index value from param = %d", __func__, value);
+            if (value >= 0) {
+                updateParamEntry(KEY_QC_INITIAL_EXPOSURE_INDEX, str);
+            }
+        }
+    } else {
+        char prop[PROPERTY_VALUE_MAX];
+        memset(prop, 0, sizeof(prop));
+        property_get("persist.camera.initial.exp.val", prop, "");
+        if ((strlen(prop) > 0) &&
+                ( (prev_str == NULL) || (strcmp(prop, prev_str) != 0))) {
+            value = atoi(prop);
+            CDBG("%s: Set initial exposure index value from setprop = %d", __func__, value);
+            if (value >= 0) {
+                updateParamEntry(KEY_QC_INITIAL_EXPOSURE_INDEX, prop);
+            }
+        }
+    }
+
+    if (value >= 0) {
+        if (ADD_SET_PARAM_ENTRY_TO_BATCH(m_pParamBuf,
+                CAM_INTF_PARM_INITIAL_EXPOSURE_INDEX, (uint32_t)value)) {
+            ALOGE("%s:Failed to update initial exposure index value", __func__);
+            rc = BAD_VALUE;
+        }
+    } else {
+        CDBG("%s: Invalid value for initial exposure index value %d", __func__, value);
+    }
+
+    return rc;
+}
+
+/*===========================================================================
  * FUNCTION   : setDISValue
  *
  * DESCRIPTION: set DIS value
@@ -7900,6 +7955,7 @@ int32_t QCameraParameters::updateAWBParams(cam_awb_params_t &awb_params)
     //check and update WB gains
     const char *prev_gains = get(KEY_QC_MANUAL_WB_GAINS);
     char gainStr[30];
+    memset(gainStr, 0 , sizeof(gainStr));
     snprintf(gainStr, sizeof(gainStr), "%f,%f,%f", awb_params.rgb_gains.r_gain,
         awb_params.rgb_gains.g_gain, awb_params.rgb_gains.b_gain);
 
@@ -9096,7 +9152,7 @@ int32_t QCameraParameters::updateFlash(bool commitSettings)
     }
 
     if (isHDREnabled() || m_bAeBracketingEnabled || m_bAFBracketingOn ||
-          m_bOptiZoomOn || m_bReFocusOn) {
+          m_bOptiZoomOn || m_bReFocusOn || m_bStillMoreOn) {
         value = CAM_FLASH_MODE_OFF;
     } else if (m_bChromaFlashOn) {
         value = CAM_FLASH_MODE_ON;
@@ -10620,7 +10676,7 @@ int32_t QCameraParameters::getExifGpsDateTimeStamp(char *gpsDateStamp,
  *==========================================================================*/
 int32_t QCameraParameters::updateFocusDistances(cam_focus_distances_info_t *focusDistances)
 {
-    String8 str;
+    String8 str("");
     char buffer[32] = {0};
     //set all distances to infinity if focus mode is infinity
     if(mFocusMode == CAM_FOCUS_MODE_INFINITY) {
@@ -11509,7 +11565,7 @@ int32_t QCameraParameters::commitParamChanges()
 {
     size_t size = m_tempMap.size();
     for (size_t i = 0; i < size; i++) {
-        String8 k, v;
+        String8 k(""), v("");
         k = m_tempMap.keyAt(i);
         v = m_tempMap.valueAt(i);
         set(k, v);

@@ -42,6 +42,7 @@
 #include <cutils/properties.h>
 #include "QCamera3Channel.h"
 #include "QCamera3HWI.h"
+#include "QCameraFormat.h"
 
 using namespace android;
 
@@ -49,8 +50,6 @@ using namespace android;
 namespace qcamera {
 static const char ExifAsciiPrefix[] =
     { 0x41, 0x53, 0x43, 0x49, 0x49, 0x0, 0x0, 0x0 };          // "ASCII\0\0\0"
-static const char ExifUndefinedPrefix[] =
-    { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };   // "\0\0\0\0\0\0\0\0"
 
 #define EXIF_ASCII_PREFIX_SIZE           8   //(sizeof(ExifAsciiPrefix))
 #define FOCAL_LENGTH_DECIMAL_PRECISION   100
@@ -522,7 +521,7 @@ void QCamera3Channel::dumpYUV(mm_camera_buf_def_t *frame, cam_dimension_t dim,
                             index += (uint32_t)offset.mp[i].stride;
                         }
                     }
-                    CDBG_HIGH("%s: written number of bytes %ld\n",
+                    CDBG_HIGH("%s: written number of bytes %d\n",
                              __func__, written_len);
                     dumpFrmCnt++;
                     close(file_fd);
@@ -588,10 +587,14 @@ cam_format_t QCamera3Channel::getStreamDefaultFormat(cam_stream_type_t type)
             if (pFormat == 1) {
                 streamFormat = CAM_FORMAT_YUV_420_NV12_UBWC;
             } else {
-                streamFormat = CAM_FORMAT_YUV_420_NV12_VENUS;
+                /* Changed to macro to ensure format sent to gralloc for preview
+                is also changed if the preview format is changed at camera HAL */
+                streamFormat = PREVIEW_STREAM_FORMAT;
             }
         } else {
-            streamFormat = CAM_FORMAT_YUV_420_NV12_VENUS;
+            /* Changed to macro to ensure format sent to gralloc for preview
+            is also changed if the preview format is changed at camera HAL */
+            streamFormat = PREVIEW_STREAM_FORMAT;
         }
         break;
     case CAM_STREAM_TYPE_VIDEO:
@@ -618,7 +621,9 @@ cam_format_t QCamera3Channel::getStreamDefaultFormat(cam_stream_type_t type)
         streamFormat = CAM_FORMAT_YUV_420_NV21;
         break;
     case CAM_STREAM_TYPE_CALLBACK:
-        streamFormat = CAM_FORMAT_YUV_420_NV21;
+        /* Changed to macro to ensure format sent to gralloc for callback
+        is also changed if the preview format is changed at camera HAL */
+        streamFormat = CALLBACK_STREAM_FORMAT;
         break;
     case CAM_STREAM_TYPE_RAW:
         streamFormat = CAM_FORMAT_BAYER_MIPI_RAW_10BPP_GBRG;
@@ -1481,7 +1486,7 @@ void QCamera3RawDumpChannel::dumpRawSnapshot(mm_camera_buf_def_t *frame)
  * RETURN          : NA
  *==========================================================================*/
 void QCamera3RawDumpChannel::streamCbRoutine(mm_camera_super_buf_t *super_frame,
-                                                QCamera3Stream *stream)
+                                                __unused QCamera3Stream *stream)
 {
     CDBG("%s: E",__func__);
     if (super_frame == NULL || super_frame->num_bufs != 1) {
@@ -2506,12 +2511,11 @@ int32_t getExifGpsProcessingMethod(char *gpsProcessingMethod,
  *              NO_ERROR  -- success
  *              none-zero failure code
  *==========================================================================*/
-int32_t getExifLatitude(rat_t *latitude,
-                                           char *latRef, double value)
+int32_t getExifLatitude(rat_t *latitude, char *latRef, double value)
 {
     char str[30];
     snprintf(str, sizeof(str), "%f", value);
-    if(str != NULL) {
+    if(str[0] != '\0') {
         parseGPSCoordinate(str, latitude);
 
         //set Latitude Ref
@@ -2541,12 +2545,11 @@ int32_t getExifLatitude(rat_t *latitude,
  *              NO_ERROR  -- success
  *              none-zero failure code
  *==========================================================================*/
-int32_t getExifLongitude(rat_t *longitude,
-                                            char *lonRef, double value)
+int32_t getExifLongitude(rat_t *longitude, char *lonRef, double value)
 {
     char str[30];
     snprintf(str, sizeof(str), "%f", value);
-    if(str != NULL) {
+    if(str[0] != '\0') {
         parseGPSCoordinate(str, longitude);
 
         //set Longitude Ref
@@ -2581,7 +2584,7 @@ int32_t getExifAltitude(rat_t *altitude, char *altRef, double argValue)
 {
     char str[30];
     snprintf(str, sizeof(str), "%f", argValue);
-    if (str != NULL) {
+    if (str[0] != '\0') {
         double value = atof(str);
         *altRef = 0;
         if(value < 0){
@@ -2608,13 +2611,12 @@ int32_t getExifAltitude(rat_t *altitude, char *altRef, double argValue)
  *              NO_ERROR  -- success
  *              none-zero failure code
  *==========================================================================*/
-int32_t getExifGpsDateTimeStamp(char *gpsDateStamp,
-                                           uint32_t bufLen,
-                                           rat_t *gpsTimeStamp, int64_t value)
+int32_t getExifGpsDateTimeStamp(char *gpsDateStamp, uint32_t bufLen,
+        rat_t *gpsTimeStamp, int64_t value)
 {
     char str[30];
     snprintf(str, sizeof(str), "%lld", (long long int)value);
-    if(str != NULL) {
+    if(str[0] != '\0') {
         time_t unixTime = (time_t)atol(str);
         struct tm *UTCTimestamp = gmtime(&unixTime);
         if (UTCTimestamp != NULL) {
@@ -2662,8 +2664,8 @@ QCamera3Exif *QCamera3PicChannel::getExifData(metadata_buffer_t *metadata,
     uint32_t count = 0;
 
     // add exif entries
-    String8 dateTime;
-    String8 subsecTime;
+    String8 dateTime("");
+    String8 subsecTime("");
     rc = getExifDateTime(dateTime, subsecTime);
     if (rc == NO_ERROR) {
         exif->addEntry(EXIFTAGID_DATE_TIME, EXIF_ASCII,
