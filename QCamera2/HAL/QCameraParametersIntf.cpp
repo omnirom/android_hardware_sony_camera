@@ -485,6 +485,13 @@ bool QCameraParametersIntf::isSceneSelectionEnabled()
     return mImpl->isSceneSelectionEnabled();
 }
 
+bool QCameraParametersIntf::isSmallJpegSizeEnabled()
+{
+    Mutex::Autolock lock(mLock);
+    CHECK_PARAM_INTF(mImpl);
+    return mImpl->isSmallJpegSizeEnabled();
+}
+
 int32_t QCameraParametersIntf::setSelectedScene(cam_scene_mode_type scene)
 {
     Mutex::Autolock lock(mLock);
@@ -590,11 +597,26 @@ bool QCameraParametersIntf::isDISEnabled()
     return mImpl->isDISEnabled();
 }
 
-cam_is_type_t QCameraParametersIntf::getISType()
+bool QCameraParametersIntf::isAVTimerEnabled()
 {
     Mutex::Autolock lock(mLock);
     CHECK_PARAM_INTF(mImpl);
-    return mImpl->getISType();
+    return mImpl->isAVTimerEnabled();
+}
+
+
+int32_t QCameraParametersIntf::setISType()
+{
+    Mutex::Autolock lock(mLock);
+    CHECK_PARAM_INTF(mImpl);
+    return mImpl->setISType();
+}
+
+cam_is_type_t QCameraParametersIntf::getVideoISType()
+{
+    Mutex::Autolock lock(mLock);
+    CHECK_PARAM_INTF(mImpl);
+    return mImpl->getVideoISType();
 }
 
 cam_is_type_t QCameraParametersIntf::getPreviewISType()
@@ -1098,11 +1120,11 @@ int32_t QCameraParametersIntf::configFrameCapture(bool commitSettings)
     return mImpl->configFrameCapture(commitSettings);
 }
 
-int32_t QCameraParametersIntf::resetFrameCapture(bool commitSettings)
+int32_t QCameraParametersIntf::resetFrameCapture(bool commitSettings, bool lowLightEnabled)
 {
     Mutex::Autolock lock(mLock);
     CHECK_PARAM_INTF(mImpl);
-    return mImpl->resetFrameCapture(commitSettings);
+    return mImpl->resetFrameCapture(commitSettings,lowLightEnabled);
 }
 
 cam_still_more_t QCameraParametersIntf::getStillMoreSettings()
@@ -1193,6 +1215,13 @@ void QCameraParametersIntf::setCurPPCount(int8_t count)
     Mutex::Autolock lock(mLock);
     CHECK_PARAM_INTF(mImpl);
     mImpl->setCurPPCount(count);
+}
+
+int32_t QCameraParametersIntf::setQuadraCfaMode(uint32_t value, bool initCommit)
+{
+    Mutex::Autolock lock(mLock);
+    CHECK_PARAM_INTF(mImpl);
+    return mImpl->setQuadraCfaMode(value, initCommit);
 }
 
 int32_t QCameraParametersIntf::setToneMapMode(uint32_t value, bool initCommit)

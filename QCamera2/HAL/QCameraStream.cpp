@@ -797,8 +797,9 @@ int32_t QCameraStream::calcOffset(cam_stream_info_t *streamInfo)
                 &streamInfo->buf_planes);
         break;
     case CAM_STREAM_TYPE_POSTVIEW:
-        rc = mm_stream_calc_offset_post_view(streamInfo->fmt,
+        rc = mm_stream_calc_offset_post_view(streamInfo,
                 &dim,
+                &mPaddingInfo,
                 &streamInfo->buf_planes);
         break;
     case CAM_STREAM_TYPE_SNAPSHOT:
@@ -1905,6 +1906,14 @@ err1:
 int32_t QCameraStream::releaseBuffs()
 {
     int rc = NO_ERROR;
+
+    if (mBufAllocPid != 0) {
+        cond_signal(true);
+        LOGD("wait for buf allocation thread dead");
+        pthread_join(mBufAllocPid, NULL);
+        mBufAllocPid = 0;
+        LOGD("return from buf allocation thread");
+    }
 
     if (mStreamInfo->streaming_mode == CAM_STREAMING_MODE_BATCH) {
         return releaseBatchBufs(NULL);

@@ -52,7 +52,7 @@ class QCameraAdjustFPS
 public:
     virtual int recalcFPSRange(int &minFPS, int &maxFPS,
             const float &minVideoFPS, const float &maxVideoFPs,
-            cam_fps_range_t &adjustedRange) = 0;
+            cam_fps_range_t &adjustedRange, bool bRecordingHint) = 0;
     virtual ~QCameraAdjustFPS() {}
 };
 
@@ -145,6 +145,7 @@ public:
     bool isFpsDebugEnabled();
     bool isHistogramEnabled();
     bool isSceneSelectionEnabled();
+    bool isSmallJpegSizeEnabled();
     int32_t setSelectedScene(cam_scene_mode_type scene);
     cam_scene_mode_type getSelectedScene();
     bool isFaceDetectionEnabled();
@@ -160,7 +161,9 @@ public:
     int32_t stopAEBracket();
     int32_t updateRAW(cam_dimension_t max_dim);
     bool isDISEnabled();
-    cam_is_type_t getISType();
+    bool isAVTimerEnabled();
+    int32_t setISType();
+    cam_is_type_t getVideoISType();
     cam_is_type_t getPreviewISType();
     uint8_t getMobicatMask();
 
@@ -242,7 +245,7 @@ public:
     int32_t configureAEBracketing(cam_capture_frame_config_t &frame_config);
     int32_t configureHDRBracketing(cam_capture_frame_config_t &frame_config);
     int32_t configFrameCapture(bool commitSettings);
-    int32_t resetFrameCapture(bool commitSettings);
+    int32_t resetFrameCapture(bool commitSettings, bool lowLightEnabled);
     cam_still_more_t getStillMoreSettings();
     void setStillMoreSettings(cam_still_more_t stillmore_config);
     cam_still_more_t getStillMoreCapability();
@@ -256,6 +259,7 @@ public:
     bool isPostProcScaling();
     bool isLLNoiseEnabled();
     void setCurPPCount(int8_t count);
+    int32_t setQuadraCfaMode(uint32_t value, bool initCommit);
     int32_t setToneMapMode(uint32_t value, bool initCommit);
     void setTintless(bool enable);
     uint8_t getLongshotStages();

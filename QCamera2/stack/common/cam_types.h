@@ -559,6 +559,12 @@ typedef struct {
 } cam_sensitivity_range_t;
 
 typedef enum {
+    CAM_ISO_PRIORITY,
+    CAM_EXP_PRIORITY,
+    CAM_DEFAULT_OFF,
+} cam_priority_mode_t;
+
+typedef enum {
     CAM_HFR_MODE_OFF,
     CAM_HFR_MODE_60FPS,
     CAM_HFR_MODE_90FPS,
@@ -872,6 +878,13 @@ typedef enum {
     CAM_SENSOR_HDR_ZIGZAG,
     CAM_SENSOR_HDR_MAX,
 } cam_sensor_hdr_type_t;
+
+typedef enum {
+    CAM_LED_CALIBRATION_MODE_OFF,
+    CAM_LED_CALIBRATION_MODE_DUAL,
+    CAM_LED_CALIBRATION_MODE_SINGLE,
+    CAM_LED_CALIBRATION_MODE_MAX
+} cam_led_calibration_mode_t;
 
 typedef struct  {
     int32_t left;
@@ -1367,6 +1380,9 @@ typedef struct {
     cam_focus_mode_type focus_mode;        /* focus mode from backend */
     int32_t focus_pos;
     cam_af_flush_info_t flush_info;
+    uint8_t isDepth;
+    float focus_value;
+    uint8_t spot_light_detected;
 } cam_auto_focus_data_t;
 
 typedef struct {
@@ -1920,7 +1936,7 @@ typedef enum {
     CAM_INTF_PARM_CDS_MODE,
     CAM_INTF_PARM_TONE_MAP_MODE,
     CAM_INTF_PARM_CAPTURE_FRAME_CONFIG, /* 90 */
-    CAM_INTF_PARM_DUAL_LED_CALIBRATION,
+    CAM_INTF_PARM_LED_CALIBRATION,
     CAM_INTF_PARM_ADV_CAPTURE_MODE,
 
     /* stream based parameters */
@@ -2203,6 +2219,11 @@ typedef enum {
     /* Number of streams and size of streams in
        current configuration for pic res*/
     CAM_INTF_META_STREAM_INFO_FOR_PIC_RES,
+    CAM_INTF_META_FOCUS_DEPTH_INFO,
+    /*Focus value output from af core*/
+    CAM_INTF_META_FOCUS_VALUE,
+    /*Spot light detection result output from af core*/
+    CAM_INTF_META_SPOT_LIGHT_DETECT,
     CAM_INTF_PARM_MAX
 } cam_intf_parm_type_t;
 
@@ -2426,6 +2447,7 @@ typedef struct {
 #define CAM_QCOM_FEATURE_PAAF           (((cam_feature_mask_t)1UL)<<32)
 #define CAM_QCOM_FEATURE_QUADRA_CFA     (((cam_feature_mask_t)1UL)<<33)
 #define CAM_QTI_FEATURE_PPEISCORE       (((cam_feature_mask_t)1UL)<<34)
+#define CAM_QCOM_FEATURE_METADATA_BYPASS (((cam_feature_mask_t)1UL)<<35)
 #define CAM_QCOM_FEATURE_PP_SUPERSET    (CAM_QCOM_FEATURE_DENOISE2D|CAM_QCOM_FEATURE_CROP|\
                                          CAM_QCOM_FEATURE_ROTATION|CAM_QCOM_FEATURE_SHARPNESS|\
                                          CAM_QCOM_FEATURE_SCALE|CAM_QCOM_FEATURE_CAC|\
@@ -2774,7 +2796,7 @@ typedef struct {
 } cam_event_t;
 
 typedef struct {
-    /* Information for DDM */
+    /* Information for DDM metadata*/
     cam_stream_crop_info_t   sensor_crop_info; /* sensor crop info */
     cam_stream_crop_info_t   camif_crop_info; /* CAMIF crop info */
     cam_stream_crop_info_t   isp_crop_info; /* ISP crop info */
@@ -2782,7 +2804,10 @@ typedef struct {
     cam_focal_length_ratio_t af_focal_length_ratio; /* AF focal length ratio */
     int32_t                  pipeline_flip; /* current pipeline flip and rotational parameters */
     cam_rotation_info_t      rotation_info; /* rotation information */
-} cam_ddm_info_t;
+    cam_area_t               af_roi;        /* AF roi info */
+    /* Information for CPP reprocess */
+    cam_dyn_img_data_t       dyn_mask;      /* Post processing dynamic feature mask */
+} cam_reprocess_info_t;
 
 /***********************************
 * ENUM definition for custom parameter type
