@@ -1178,7 +1178,7 @@ void *QCameraStream::dataProcRoutine(void *data)
         switch (cmd) {
         case CAMERA_CMD_TYPE_DO_NEXT_JOB:
             {
-                LOGD("Do next job");
+                LOGH("Do next job");
                 mm_camera_super_buf_t *frame =
                     (mm_camera_super_buf_t *)pme->mDataQ.dequeue();
                 if (NULL != frame) {
@@ -3001,9 +3001,6 @@ int32_t QCameraStream::setBundleInfo()
 
     cam_stream_parm_buffer_t param, aux_param;
     uint32_t active_handle = get_main_camera_handle(mChannelHandle);
-    if (mCamType == CAM_TYPE_AUX) {
-        active_handle = get_aux_camera_handle(mChannelHandle);
-    }
     memset(&bundleInfo, 0, sizeof(bundleInfo));
     if (active_handle) {
         ret = mCamOps->get_bundle_info(mCamHandle, active_handle,
@@ -3030,13 +3027,8 @@ int32_t QCameraStream::setBundleInfo()
     }
 
     if (mStreamInfo->parm_buf.bundleInfo.num_of_streams > 1) {
-        uint32_t channelHdl = get_main_camera_handle(mChannelHandle);
-        uint32_t streamHdl = get_main_camera_handle(mHandle);
-        if (mCamType == CAM_TYPE_AUX) {
-            channelHdl = mChannelHandle;
-            streamHdl = mHandle;
-        }
-        ret = mCamOps->set_stream_parms(mCamHandle, channelHdl, streamHdl,
+        ret = mCamOps->set_stream_parms(mCamHandle,
+                get_main_camera_handle(mChannelHandle), get_main_camera_handle(mHandle),
                 &mStreamInfo->parm_buf);
     }
 
