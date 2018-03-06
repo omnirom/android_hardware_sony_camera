@@ -91,7 +91,6 @@ namespace qcamera {
 #define TEMPLATE_MAX_PREVIEW_FPS (30.0)
 #define MAX_HFR_BATCH_SIZE     (8)
 #define REGIONS_TUPLE_COUNT    5
-#define HDR_PLUS_PERF_TIME_OUT  (7000) // milliseconds
 // Set a threshold for detection of missing buffers //seconds
 #define MISSING_REQUEST_BUF_TIMEOUT 3
 #define FLUSH_TIMEOUT 3
@@ -3776,7 +3775,8 @@ void QCamera3HardwareInterface::hdrPlusPerfLock(
         return;
     }
 
-    //acquire perf lock for 5 sec after the last HDR frame is captured
+    //acquire perf lock for 2 secs after the last HDR frame is captured
+    constexpr uint32_t HDR_PLUS_PERF_TIME_OUT = 2000;
     if ((p_frame_number_valid != NULL) && *p_frame_number_valid) {
         if ((p_frame_number != NULL) &&
                 (mLastCustIntentFrmNum == (int32_t)*p_frame_number)) {
@@ -9654,6 +9654,8 @@ int QCamera3HardwareInterface::initStaticMetadata(uint32_t cameraId)
         available_request_keys.add(ANDROID_CONTROL_AF_REGIONS);
     }
 
+    available_request_keys.add(NEXUS_EXPERIMENTAL_2017_DISABLE_HDRPLUS);
+
     staticInfo.update(ANDROID_REQUEST_AVAILABLE_REQUEST_KEYS,
             available_request_keys.array(), available_request_keys.size());
 
@@ -10072,6 +10074,15 @@ int QCamera3HardwareInterface::initStaticMetadata(uint32_t cameraId)
         staticInfo.update(
             QCAMERA3_HFR_SIZES,
             custom_hfr_configs.array(), custom_hfr_configs.size());
+    }
+
+    size_t eepromLength = strnlen(
+            reinterpret_cast<const char *>(
+                    gCamCapability[cameraId]->eeprom_version_info),
+            sizeof(gCamCapability[cameraId]->eeprom_version_info));
+    if (0 < eepromLength) {
+        staticInfo.update(NEXUS_EXPERIMENTAL_2017_EEPROM_VERSION_INFO,
+                gCamCapability[cameraId]->eeprom_version_info, eepromLength);
     }
 
     gStaticMetadata[cameraId] = staticInfo.release();
@@ -10848,6 +10859,10 @@ camera_metadata_t* QCamera3HardwareInterface::translateCapabilityToMetadata(int 
 
     /* hybrid ae */
     settings.update(NEXUS_EXPERIMENTAL_2016_HYBRID_AE_ENABLE, &hybrid_ae, 1);
+
+    // Disable HDR+ for templates other than CAMERA3_TEMPLATE_STILL_CAPTURE.
+    int32_t disableHdrplus = (type == CAMERA3_TEMPLATE_STILL_CAPTURE) ? 0 : 1;
+    settings.update(NEXUS_EXPERIMENTAL_2017_DISABLE_HDRPLUS, &disableHdrplus, 1);
 
     mDefaultMetadata[type] = settings.release();
 
