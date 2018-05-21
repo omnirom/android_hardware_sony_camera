@@ -98,8 +98,7 @@ namespace qcamera {
 #define TEMPLATE_MAX_PREVIEW_FPS (30.0)
 #define MAX_HFR_BATCH_SIZE     (8)
 #define REGIONS_TUPLE_COUNT    5
-// Set a threshold for detection of missing buffers //seconds
-#define MISSING_REQUEST_BUF_TIMEOUT 3
+#define MISSING_REQUEST_BUF_TIMEOUT 10
 #define FLUSH_TIMEOUT 3
 #define METADATA_MAP_SIZE(MAP) (sizeof(MAP)/sizeof(MAP[0]))
 
@@ -13324,6 +13323,21 @@ int QCamera3HardwareInterface::validateStreamRotations(
     */
     for (size_t j = 0; j < streamList->num_streams; j++){
         camera3_stream_t *newStream = streamList->streams[j];
+
+        switch(newStream->rotation) {
+            case CAMERA3_STREAM_ROTATION_0:
+            case CAMERA3_STREAM_ROTATION_90:
+            case CAMERA3_STREAM_ROTATION_180:
+            case CAMERA3_STREAM_ROTATION_270:
+                //Expected values
+                break;
+            default:
+                ALOGE("%s: Error: Unsupported rotation of %d requested for stream"
+                        "type:%d and stream format:%d", __func__,
+                        newStream->rotation, newStream->stream_type,
+                        newStream->format);
+                return -EINVAL;
+        }
 
         bool isRotated = (newStream->rotation != CAMERA3_STREAM_ROTATION_0);
         bool isImplDef = (newStream->format ==
