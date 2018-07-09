@@ -551,6 +551,10 @@ QCamera3HardwareInterface::QCamera3HardwareInterface(uint32_t cameraId,
     m_cacModeDisabled = (uint8_t)atoi(prop);
 
     mRdiModeFmt = gCamCapability[mCameraId]->rdi_mode_stream_fmt;
+
+    m_bForceInfinityAf = property_get_bool("persist.camera.af.infinity", 0);
+    m_MobicatMask = (uint8_t)property_get_int32("persist.camera.mobicat", 0);
+
     //Load and read GPU library.
     lib_surface_utils = NULL;
     LINK_get_surface_pixel_alignment = NULL;
@@ -717,7 +721,7 @@ QCamera3HardwareInterface::~QCamera3HardwareInterface()
             stream_config_info.buffer_info.min_buffers = MIN_INFLIGHT_REQUESTS;
             stream_config_info.buffer_info.max_buffers =
                     m_bIs4KVideo ? 0 :
-                    m_bEis3PropertyEnabled ? MAX_VIDEO_BUFFERS : MAX_INFLIGHT_REQUESTS;
+                    m_bEis3PropertyEnabled && m_bIsVideo ? MAX_VIDEO_BUFFERS : MAX_INFLIGHT_REQUESTS;
             clear_metadata_buffer(mParameters);
             ADD_SET_PARAM_ENTRY_TO_BATCH(mParameters, CAM_INTF_META_STREAM_INFO,
                     stream_config_info);
@@ -2384,8 +2388,12 @@ int QCamera3HardwareInterface::configureStreamsPerfLocked(
                         int bufferCount = MAX_INFLIGHT_REQUESTS;
                         if (mStreamConfigInfo.type[mStreamConfigInfo.num_streams] ==
                                 CAM_STREAM_TYPE_VIDEO) {
-                            if (m_bEis3PropertyEnabled /* hint for EIS 3 needed here */)
-                                bufferCount = MAX_VIDEO_BUFFERS;
+                            if (m_bEis3PropertyEnabled /* hint for EIS 3 needed here */) {
+                                // WAR: 4K video can only run <=30fps, reduce the buffer count.
+                                bufferCount = m_bIs4KVideo ?
+                                    MAX_30FPS_VIDEO_BUFFERS : MAX_VIDEO_BUFFERS;
+                            }
+
                         }
                         channel = new QCamera3RegularChannel(mCameraHandle->camera_handle,
                                 mChannelHandle, mCameraHandle->ops, captureResultCb,
@@ -2792,7 +2800,7 @@ int QCamera3HardwareInterface::configureStreamsPerfLocked(
     mStreamConfigInfo.buffer_info.min_buffers = MIN_INFLIGHT_REQUESTS;
     mStreamConfigInfo.buffer_info.max_buffers =
             m_bIs4KVideo ? 0 :
-            m_bEis3PropertyEnabled ? MAX_VIDEO_BUFFERS : MAX_INFLIGHT_REQUESTS;
+            m_bEis3PropertyEnabled && m_bIsVideo ? MAX_VIDEO_BUFFERS : MAX_INFLIGHT_REQUESTS;
 
     /* Initialize mPendingRequestInfo and mPendingBuffersMap */
     for (pendingRequestIterator i = mPendingRequestsList.begin();
@@ -4509,6 +4517,11 @@ int32_t QCamera3HardwareInterface::captureQuadraCfaRawInternal(camera3_capture_r
     delete mMetadataChannel;
     mMetadataChannel = NULL;
 
+    LOGD("reset quadra cfa mode after capture done.");
+    bool enable = false;
+    ADD_SET_PARAM_ENTRY_TO_BATCH(mParameters, CAM_INTF_PARM_QUADRA_CFA, enable);
+    mCameraHandle->ops->set_parms(mCameraHandle->camera_handle, mParameters);
+
     mStreamInfo.clear();
     pthread_mutex_unlock(&mMutex);
     configureStreamsPerfLocked(&mStreamList);
@@ -4737,7 +4750,7 @@ int QCamera3HardwareInterface::processCaptureRequest(
                     MIN_INFLIGHT_REQUESTS;
             stream_config_info.buffer_info.max_buffers =
                     m_bIs4KVideo ? 0 :
-                    m_bEis3PropertyEnabled ? MAX_VIDEO_BUFFERS : MAX_INFLIGHT_REQUESTS;
+                    m_bEis3PropertyEnabled && m_bIsVideo ? MAX_VIDEO_BUFFERS : MAX_INFLIGHT_REQUESTS;
             clear_metadata_buffer(mParameters);
             ADD_SET_PARAM_ENTRY_TO_BATCH(mParameters,
                     CAM_INTF_PARM_HAL_VERSION, hal_version);
@@ -5675,6 +5688,7 @@ no_error:
         if (channel == NULL) {
             LOGE("invalid channel pointer for stream");
             assert(0);
+            pthread_mutex_unlock(&mMutex);
             return BAD_VALUE;
         }
 
@@ -5733,6 +5747,7 @@ no_error:
         } else {
             LOGE("Internal requests not supported on this stream type");
             assert(0);
+            pthread_mutex_unlock(&mMutex);
             return INVALID_OPERATION;
         }
         latestRequest->internalRequestList.push_back(requestedStream);
@@ -6343,6 +6358,10 @@ int32_t QCamera3HardwareInterface::getReprocessibleOutputStreamId(uint32_t &id)
                 LOGD("Found reprocessible output stream! %p", *it);
                 LOGD("input stream usage 0x%x, current stream usage 0x%x",
                          stream->usage, mInputStreamInfo.usage);
+                if (stream->usage & (GRALLOC_USAGE_HW_TEXTURE | GRALLOC_USAGE_HW_COMPOSER)) {
+                    LOGD("stream with HW_TEXTURE/HW_COMPOSER usage (preview stream), skip it.");
+                    continue;
+                }
 
                 QCamera3Channel *channel = (QCamera3Channel *)stream->priv;
                 if (channel != NULL && channel->mStreams[0]) {
@@ -9735,7 +9754,7 @@ int QCamera3HardwareInterface::initStaticMetadata(uint32_t cameraId)
         available_result_keys.add(ANDROID_STATISTICS_FACE_LANDMARKS);
     }
 #ifndef USE_HAL_3_3
-    if (hasBlackRegions) {
+    {
         available_result_keys.add(ANDROID_SENSOR_DYNAMIC_BLACK_LEVEL);
         available_result_keys.add(ANDROID_SENSOR_DYNAMIC_WHITE_LEVEL);
     }
@@ -11534,14 +11553,11 @@ int QCamera3HardwareInterface::translateToHalMetadata
         }
     }
 
-    char af_value[PROPERTY_VALUE_MAX];
-    property_get("persist.camera.af.infinity", af_value, "0");
-
     uint8_t fwk_focusMode = 0;
     bool use_tof = false;
 #ifdef TARGET_HAS_CASH
     tof_focusing = false;
-    if (atoi(af_value) == 0 && mCameraId == 0) {
+    if (m_bForceInfinityAf == 0 && mCameraId == 0) {
         if (frame_settings.exists(ANDROID_CONTROL_AF_MODE)) {
             /* Don't use ToF if we are in manual focus mode */
             fwk_focusMode =
@@ -11565,7 +11581,7 @@ int QCamera3HardwareInterface::translateToHalMetadata
         }
     }
 #endif
-    if (atoi(af_value) == 0 && !use_tof) {
+    if ((m_bForceInfinityAf == 0) && !use_tof){
         if (frame_settings.exists(ANDROID_CONTROL_AF_MODE)) {
             fwk_focusMode = frame_settings.find(ANDROID_CONTROL_AF_MODE).data.u8[0];
             int val = lookupHalName(FOCUS_MODES_MAP, METADATA_MAP_SIZE(FOCUS_MODES_MAP),
@@ -13239,12 +13255,9 @@ uint8_t QCamera3HardwareInterface::getMobicatMask()
  *==========================================================================*/
 int32_t QCamera3HardwareInterface::setMobicat()
 {
-    char value [PROPERTY_VALUE_MAX];
-    property_get("persist.camera.mobicat", value, "0");
     int32_t ret = NO_ERROR;
-    uint8_t enableMobi = (uint8_t)atoi(value);
 
-    if (enableMobi) {
+    if (m_MobicatMask) {
         tune_cmd_t tune_cmd;
         tune_cmd.type = SET_RELOAD_CHROMATIX;
         tune_cmd.module = MODULE_ALL;
@@ -13257,7 +13270,6 @@ int32_t QCamera3HardwareInterface::setMobicat()
                 CAM_INTF_PARM_SET_PP_COMMAND,
                 tune_cmd);
     }
-    m_MobicatMask = enableMobi;
 
     return ret;
 }

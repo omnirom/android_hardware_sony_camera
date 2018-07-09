@@ -97,6 +97,8 @@ QCamera3Channel::QCamera3Channel(uint32_t cam_handle,
     mNumBuffers = numBuffers;
     mPerFrameMapUnmapEnable = true;
     mDumpFrmCnt = 0;
+
+    mYUVDump = property_get_int32("persist.camera.dumpimg", 0);
 }
 
 /*===========================================================================
@@ -513,9 +515,6 @@ void QCamera3Channel::dumpYUV(mm_camera_buf_def_t *frame, cam_dimension_t dim,
     char buf[FILENAME_MAX];
     memset(buf, 0, sizeof(buf));
     static int counter = 0;
-    char prop[PROPERTY_VALUE_MAX];
-    property_get("persist.camera.dumpimg", prop, "0");
-    mYUVDump = (uint32_t)atoi(prop);
     if (mYUVDump & dump_type) {
         mFrmNum = ((mYUVDump & 0xffff0000) >> 16);
         if (mFrmNum == 0) {
@@ -1025,6 +1024,8 @@ void QCamera3YUVChannel::putStreamBufs()
     mFreeHeapBufferList.clear();
     // Clear offlinePpInfoList
     mOfflinePpInfoList.clear();
+    // Clear offlineMemory
+    mOfflineMemory.clear();
 }
 
 /*===========================================================================
@@ -4145,7 +4146,7 @@ int32_t QCamera3PicChannel::request(buffer_handle_t *buffer,
             return -1;
         }
         memcpy(super_buf, &(pChannel->raw_frame), sizeof(mm_camera_super_buf_t));
-        m_postprocessor.processData(super_buf);
+        m_postprocessor.processData(super_buf, NULL, frameNumber);
     } else if (pInputBuffer == NULL) {
         Mutex::Autolock lock(mFreeBuffersLock);
         uint32_t bufIdx;
@@ -4340,6 +4341,8 @@ void QCamera3PicChannel::putStreamBufs()
     delete mYuvMemory;
     mYuvMemory = NULL;
     mFreeBufferList.clear();
+    // Clear offlineMemory
+    mOfflineMemory.clear();
 }
 
 int32_t QCamera3PicChannel::queueJpegSetting(uint32_t index, metadata_buffer_t *metadata)
